@@ -18,7 +18,7 @@ docker build -t clockdegree . сборка образа
 minikube start запуск миникуба
 kubectl cluster-info просмотрк инфо о кластере
 kubectl config use-context minikube переключение контекста Кубернетеса на Миникуб
-minikube image load
+minikube image load __ загрузка докер-образа в миникуб
 kubectl apply -f kube.yaml применение изменений из файла манифеста к ресурсам Кубернетеса
 kubectl get deployments получение списка развертываний
 kubectl expose deployment clockdegree --type=NodePort создание сервиса типа NodePort, чтобы приложение было доступно из-за пределов кластера. Порт назначается автоматическм
@@ -32,8 +32,15 @@ minikube stop остановка миникуба
 
 Prometheus
 подключение зависимости 'io.micrometer:micrometer-registry-prometheus:1.13.6'
-файл прометей ямл
-указание на эндпоинты в application.properties 'management.endpoints.web.exposure.include=prometheus,health,info,metrics'
+В кубе:
+установка прометея через хельм
+патч на нодпорт
+редактирование конфигмапы: kubectl edit configmap prometheus-server -n default ( - job_name: clockdegree
+                                                           static_configs:
+                                                           - targets:
+                                                             - clockdegree.default.svc.cluster.local:80
+                                                           metrics_path: /actuator/prometheus              )
+рестарт деплоймента прометей
 
 
 ---
@@ -63,4 +70,4 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'  # The HTTP resource path on which to fetch metrics from targets.
     scrape_interval: 5s                   # How frequently to scrape targets from this job.
     static_configs:                       # A static_config allows specifying a list of targets and a common label set for them
-      - targets: ['192.168.49.1:8080']
+      - targets: ['clockdegree.default.svc.cluster.local:8080']
