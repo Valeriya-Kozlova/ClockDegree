@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clockdegree-scrape-config
+  namespace: default
+data:
+  additional-scrape-configs.yaml: |
+    - job_name: 'clockdegree'
+      static_configs:
+        - targets: ['clockdegree:80']
