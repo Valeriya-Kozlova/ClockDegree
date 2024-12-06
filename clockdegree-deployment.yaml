@@ -4,6 +4,8 @@ metadata:
   name: clockdegree
   labels:
     app: clockdegree
+  annotations:
+    instrumentation.opentelemetry.io/inject-java: "true"
 spec:
   replicas: 1
   selector:
@@ -16,7 +18,7 @@ spec:
     spec:
       containers:
         - name: clockdegree
-          image: app-image1:latest
+          image: clockdegree:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -43,12 +45,17 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: default
   name: clockdegree
+  labels:
+    app: clockdegree
+    prometheus-monitoring: "true"
 spec:
   selector:
     app: clockdegree
   ports:
-    - protocol: TCP
-      port: 80
+    - name: http
+      port: 8080
+      protocol: TCP
       targetPort: 8080
   type: NodePort
