@@ -4,8 +4,6 @@ metadata:
   name: clockdegree
   labels:
     app: clockdegree
-  annotations:
-    instrumentation.opentelemetry.io/inject-java: "true"
 spec:
   replicas: 1
   selector:
@@ -15,6 +13,13 @@ spec:
     metadata:
       labels:
         app: clockdegree
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "true"
+        instrument.opentelemetry.io/otel-config: |
+          {
+            "otel.exporter.otlp.endpoint": "http://simplest-collector.default.svc.cluster.local:4317",
+            "otel.service.name": "clockdegree"
+          }
     spec:
       containers:
         - name: clockdegree
