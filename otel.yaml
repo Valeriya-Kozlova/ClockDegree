@@ -1,8 +1,7 @@
 apiVersion: opentelemetry.io/v1alpha1
 kind: OpenTelemetryCollector
 metadata:
-  name: otel-collector
-  namespace: default
+  name: otel
 spec:
   config: |
     receivers:
@@ -10,17 +9,19 @@ spec:
         protocols:
           grpc:
           http:
-
+    
     processors:
-      batch: {}
       memory_limiter:
-        limit_mib: 512
-        spike_limit_mib: 128
         check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch:
+        send_batch_size: 10000
+        timeout: 10s
 
     exporters:
       otlp:
-        endpoint: "simplest-collector.default.svc.cluster.local:14250"
+        endpoint: simplest-collector.default.svc.cluster.local:4317
         tls:
           insecure: true
 
@@ -30,4 +31,3 @@ spec:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [otlp]
-

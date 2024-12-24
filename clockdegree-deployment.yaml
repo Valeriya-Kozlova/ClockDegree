@@ -14,16 +14,12 @@ spec:
       labels:
         app: clockdegree
       annotations:
+        sidecar.opentelemetry.io/inject: "true"
         instrumentation.opentelemetry.io/inject-java: "true"
-        instrument.opentelemetry.io/otel-config: |
-          {
-            "otel.exporter.otlp.endpoint": "http://simplest-collector.default.svc.cluster.local:4317",
-            "otel.service.name": "clockdegree"
-          }
     spec:
       containers:
         - name: clockdegree
-          image: clockdegree:latest
+          image: clockdegree1:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -64,3 +60,4 @@ spec:
       protocol: TCP
       targetPort: 8080
   type: NodePort
+

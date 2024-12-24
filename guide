@@ -1,0 +1,239 @@
+
+## 1. Создание Dockerfile
+
+Пример Dockerfile:  FROM eclipse-temurin:21-jre-alpine  # Базовый образ Java 21 JRE на Alpine Linux
+ARG JAR_FILE=build/libs/*.jar       # Переменная JAR_FILE для указания пути к jar-файлу
+COPY ${JAR_FILE} ClockDegree.jar    # Копирование jar-файла в контейнер под именем ClockDegree.jar
+EXPOSE 8080                         # Открытие порта 8080 для взаимодействия с приложением
+ENTRYPOINT ["java", "-jar", "/ClockDegree.jar"]  # Команда для запуска приложения
+
+### Описание:
+1. FROM: Указывает базовый образ, содержащий Java Runtime Environment.
+2. ARG: Задаёт переменную для пути к jar-файлу.
+3. COPY: Копирует указанный jar-файл внутрь контейнера.
+4. EXPOSE: Сообщает, что приложение будет доступно через порт 8080.
+5. ENTRYPOINT: Определяет команду запуска приложения.
+
+---
+
+## 2. Добавление Liveness и Readiness Probes с Spring Boot Actuator
+
+### Шаги:
+1. Добавить зависимость Spring Boot Actuator в `build.gradle` или `pom.xml`:
+     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+   2. эндпоинты в `application.yml` или `application.properties`:
+     management:
+     endpoints:
+       web:
+         exposure:
+           include: health,info
+
+3. Создание Kubernetes-манифест с probes:
+     apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: clockdegree
+   spec:
+     replicas: 1
+     selector:
+       matchLabels:
+         app: clockdegree
+     template:
+       metadata:
+         labels:
+           app: clockdegree
+       spec:
+         containers:
+           - name: clockdegree
+             image: clockdegree
+             ports:
+               - containerPort: 8080
+             livenessProbe:
+               httpGet:
+                 path: /actuator/health
+                 port: 8080
+               initialDelaySeconds: 10
+               periodSeconds: 10
+             readinessProbe:
+               httpGet:
+                 path: /actuator/health
+                 port: 8080
+               initialDelaySeconds: 5
+               periodSeconds: 10
+
+---
+
+## 3. Локальное развертывание в Kubernetes (Minikube)
+
+### Шаги:
+
+1. Сборка Docker-образа:
+     docker build -t clockdegree .
+
+2. Запуск Minikube:
+     minikube start
+
+3. Проверка информации о кластере:
+     kubectl cluster-info
+
+4. Переключение контекста на Minikube:
+     kubectl config use-context minikube
+
+5. Загрузка образа в Minikube:
+     minikube image load clockdegree:latest
+
+6. Применение манифеста:
+     kubectl apply -f kube.yaml
+
+7. Проверка развертываний:
+     kubectl get deployments
+
+8. Создание сервиса NodePort (если в мнифесте не указано):
+     kubectl expose deployment clockdegree --type=NodePort
+
+9. Получение информации о сервисах:
+     kubectl get services
+
+10. Доступ к сервису через Minikube:
+       minikube service clockdegree
+
+---
+
+## 4. Завершение работы
+
+### Удаление созданных ресурсов:
+1. Удалить сервис:
+     kubectl delete service clockdegree
+
+2. Удалить развертывание:
+     kubectl delete deployment clockdegree
+
+3. Остановить Minikube:
+     minikube stop
+
+4. Удаление кластера и всех ресурсов:
+     minikube delete
+
+# Инструкция по подключению Prometheus Operator с ServiceMonitor
+
+## 1. Зависимости
+1. Подключение зависимостей
+
+	implementation 'io.micrometer:micrometer-registry-prometheus:1.13.6'
+2. Cert-manager
+   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+
+3. Установка хелм чарта с Prometheus Operator в кластер миникуба:
+       helm install prometheus-operator prometheus-community/kube-prometheus-stack
+---
+
+## 2. Настройка манифеста ServiceMonitor
+
+Создайте файл service-monitor.yaml со следующим содержимым:
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: clockdegree-servicemonitor
+  labels:
+    release: prometheus  # Замените на имя релиза вашего Prometheus Operator, если требуется
+spec:
+  selector:
+    matchLabels:
+      app: clockdegree
+  endpoints:
+    - port: http  # Имя порта, указанное в манифесте сервиса
+      path: /actuator/prometheus  # Эндпоинт метрик
+      interval: 15s  # Частота сбора метрик
+
+### Примечания:
+- `release: prometheus`: метка должна соответствовать метке, используемой в вашем установке Prometheus Operator.
+- `matchLabels`: метки, которые должен иметь сервис вашего приложения, чтобы ServiceMonitor начал собирать с него метрики.
+
+---
+
+## 3. Обновление манифеста сервиса приложения
+
+Если манифест вашего сервиса ещё не настроен, создайте или обновите kube.yaml, чтобы он выглядел примерно так:
+apiVersion: v1
+kind: Service
+metadata:
+  name: clockdegree
+  labels:
+    app: clockdegree
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: clockdegree
+
+---
+
+## 4. Применение конфигураций
+
+1. Примените манифест сервиса:
+     kubectl apply -f clockdegree-deployment.yaml
+     kubectl apply -f service-monitor.yaml
+
+2. В новой сессии терминала портфорвард kubectl port-forward svc/prometheus-operated 9090:9090
+
+---
+
+## 5. Проверка подключения
+
+1. Убедитесь, что сервис создан:
+     kubectl get services
+
+2. Проверьте, что ServiceMonitor успешно создан:
+     kubectl get servicemonitor
+
+3. Проверьте, что Prometheus собирает метрики:
+   - Подключитесь к интерфейсу Prometheus. Если вы используете Minikube, выполните:
+         minikube service prometheus
+        - Перейдите на вкладку Targets и убедитесь, что ваш сервис отображается как "UP".
+
+---
+
+kubectl create namespace observability
+kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/download/v0.114.1/opentelemetry-operator.yaml
+kubectl apply -f  https://github.com/jaegertracing/jaeger-operator/releases/download/v1.42.0/jaeger-operator.yaml -n observability
+
+BY STEPS
+
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+kubectl create namespace observability
+kubectl apply -f  https://github.com/jaegertracing/jaeger-operator/releases/download/v1.62.0/jaeger-operator.yaml -n observability
+kubectl apply -f - <<EOF
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: simplest
+EOF
+minikube image load clockdegree1:latest
+helm install prometheus-operator prometheus-community/kube-prometheus-stack
+kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml
+kubectl apply -f otel.yaml
+
+kubectl apply -f - <<EOF
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: my-instrumentation
+spec:
+  exporter:
+    endpoint: http://otel-collector.default.svc.cluster.local:4317
+  propagators:
+    - tracecontext
+    - baggage
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+EOF
+
+kubectl apply -f clockdegree-deployment.yaml
+
+
+kubectl port-forward svc/prometheus-operated 9090:9090
+kubectl port-forward svc/simplest-query 16686:16686
+
